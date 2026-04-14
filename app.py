@@ -6,71 +6,81 @@ def calculate_rolling_radius(rg, rh):
     return (2/3) * rg + (1/3) * rh
 
 def main():
-    st.set_page_config(page_title="Rolling Radius Visualizer", page_icon="🛞")
+    st.set_page_config(page_title="Rolling Radius Calc", page_icon="🛞")
     
     st.title("🛞 Rolling Radius Visualizer")
-    st.markdown("""
-    Based on the **AutoMotorGarage** formula, the effective rolling radius is a weighted average 
-    of the physical tire dimensions.
-    """)
-
-    # Sidebar Inputs
-    st.sidebar.header("Tire Parameters")
-    rg = st.sidebar.slider("Geometric Radius (Rg) [mm]", 200, 500, 315)
-    deflection_pct = st.sidebar.slider("Vertical Deflection (%)", 0, 20, 5)
     
-    # Calculate values
-    rh = rg * (1 - (deflection_pct / 100))
-    rw = calculate_rolling_radius(rg, rh)
-
-    # Display Metrics
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Geometric (Rg)", f"{rg} mm")
-    col2.metric("Loaded (Rh)", f"{rh:.1f} mm")
-    col3.metric("Rolling (Rw)", f"{rw:.1f} mm", delta=f"{rw-rg:.1f} mm")
-
-    # --- Graphical Representation ---
-    st.subheader("Geometry Visualization")
+    # Sidebar for inputs
+    st.sidebar.header("Input Parameters")
     
-    # Create a circle for the tire
-    theta = np.linspace(0, 2*np.pi, 100)
-    x_unloaded = rg * np.cos(theta)
-    y_unloaded = rg * np.sin(theta)
+    # Text Box entries
+    rg_input = st.sidebar.text_input("Geometric Radius (Rg) [mm]", value="315.0")
+    rh_input = st.sidebar.text_input("Loaded Height (Rh) [mm]", value="300.0")
 
-    fig = go.Figure()
+    try:
+        # Convert string inputs to floats
+        rg = float(rg_input)
+        rh = float(rh_input)
+        
+        if rh > rg:
+            st.error("⚠️ Loaded height (Rh) cannot be greater than Geometric radius (Rg).")
+        elif rh <= 0 or rg <= 0:
+            st.error("⚠️ Values must be greater than zero.")
+        else:
+            # Calculation
+            rw = calculate_rolling_radius(rg, rh)
 
-    # Unloaded Tire (Geometric)
-    fig.add_trace(go.Scatter(x=x_unloaded, y=y_unloaded, name='Unloaded Tire (Rg)', 
-                             line=dict(color='gray', dash='dash')))
+            # Metrics
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Geometric (Rg)", f"{rg} mm")
+            c2.metric("Loaded (Rh)", f"{rh} mm")
+            c3.metric("Rolling (Rw)", f"{rw:.2f} mm")
 
-    # Ground Line
-    fig.add_shape(type="line", x0=-rg, y0=-rh, x1=rg, y1=-rh, 
-                  line=dict(color="Black", width=3))
+            # --- Plotting ---
+            theta = np.linspace(0, 2*np.pi, 100)
+            
+            fig = go.Figure()
 
-    # Radii Markers
-    # Rg line
-    fig.add_trace(go.Scatter(x=[0, 0], y=[0, rg], mode='lines+markers', name='Rg (Geometric)', line=dict(color='blue')))
-    # Rh line
-    fig.add_trace(go.Scatter(x=[0, 0], y=[0, -rh], mode='lines+markers', name='Rh (Loaded Height)', line=dict(color='red')))
-    # Rw indicator (The effective rolling circle)
-    fig.add_trace(go.Scatter(x=rw * np.cos(theta), y=rw * np.sin(theta), 
-                             name='Effective Rolling Radius (Rw)', line=dict(color='green', width=3)))
+            # 1. Unloaded Tire (Geometric)
+            fig.add_trace(go.Scatter(
+                x=rg * np.cos(theta), y=rg * np.sin(theta),
+                name='Geometric Profile (Rg)',
+                line=dict(color='rgba(100, 100, 100, 0.5)', dash='dash')
+            ))
 
-    fig.update_layout(
-        xaxis=dict(range=[-rg-20, rg+20], constrain='domain'),
-        yaxis=dict(range=[-rg-20, rg+20], scaleanchor="x", scaleratio=1),
-        width=600, height=600,
-        showlegend=True,
-        template="plotly_white"
-    )
+            # 2. Effective Rolling Circle (Rw)
+            fig.add_trace(go.Scatter(
+                x=rw * np.cos(theta), y=rw * np.sin(theta),
+                name='Effective Rolling Circle (Rw)',
+                line=dict(color='green', width=4)
+            ))
 
-    st.plotly_chart(fig, use_container_width=True)
+            # 3. Axle to Ground (Rh)
+            fig.add_trace(go.Scatter(
+                x=[0, 0], y=[0, -rh],
+                mode='lines+markers',
+                name='Loaded Height (Rh)',
+                line=dict(color='red', width=3)
+            ))
 
-    st.info("""
-    **Observation:** Notice that the green circle (Effective Rolling Radius $R_w$) is larger than 
-    the loaded height (red line) but smaller than the geometric radius (blue line). 
-    This is because the tire tread compresses but doesn't act like a perfectly rigid point.
-    """)
+            # 4. Ground Line
+            fig.add_shape(type="line", x0=-rg*1.2, y0=-rh, x1=rg*1.2, y1=-rh,
+                          line=dict(color="Black", width=4))
+
+            fig.update_layout(
+                xaxis=dict(showgrid=False, zeroline=False, visible=False),
+                yaxis=dict(showgrid=False, zeroline=False, visible=False, scaleanchor="x", scaleratio=1),
+                height=500,
+                margin=dict(l=20, r=20, t=20, b=20),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+            
+            st.success(f"**Result:** For every rotation, the wheel travels **{2 * np.pi * rw:.2f} mm**.")
+
+    except ValueError:
+        st.sidebar.error("Please enter valid numerical values.")
 
 if __name__ == "__main__":
     main()
